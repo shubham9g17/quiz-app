@@ -2,7 +2,7 @@
 /**
  * NCERT Quiz Pipeline (uses Claude CLI — no API key needed)
  *
- * Dump all textbook/question bank photos into uploads/<subject-id>/ and run:
+ * Dump new textbook/question bank photos into uploads/<subject-id>/ and run:
  *   npx tsx scripts/pipeline.ts <subject-id>
  *
  * The pipeline will:
@@ -12,6 +12,9 @@
  *   4. Convert extracted Q&A into the quiz app's markdown format in content/<subject-id>/
  *
  * It does NOT generate new questions — it only extracts what's in the photos.
+ * After extraction, processed photos are moved to uploads/<subject-id>/processed/
+ * so re-running the pipeline only picks up newly added images.
+ * Batches run in parallel to minimize total processing time.
  *
  * Options:
  *   --step extract     Only extract from photos into knowledge/
@@ -20,9 +23,13 @@
  * Requires: `claude` CLI installed and authenticated
  */
 
-import { execSync } from "child_process";
+import { exec, execSync } from "child_process";
+import { promisify } from "util";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
+
+const execAsync = promisify(exec);
 
 // ── Config ──────────────────────────────────────
 const ROOT = path.resolve(__dirname, "..");
@@ -32,7 +39,7 @@ const CONTENT_DIR = path.join(ROOT, "content");
 const SUBJECTS_FILE = path.join(UPLOADS_DIR, "subjects.json");
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
-const MAX_IMAGES_PER_BATCH = 10;
+const MAX_IMAGES_PER_BATCH = 5;
 
 interface SubjectConfig {
   id: string;
@@ -62,29 +69,44 @@ function getImageFiles(dir: string): string[] {
     .map((f) => path.join(dir, f));
 }
 
-function log(msg: string) {
-  console.log(`[pipeline] ${msg}`);
+function moveToProcessed(images: string[], subjectDir: string): void {
+  const processedDir = path.join(subjectDir, "processed");
+  fs.mkdirSync(processedDir, { recursive: true });
+  for (const img of images) {
+    fs.renameSync(img, path.join(processedDir, path.basename(img)));
+  }
 }
 
-function callClaude(prompt: string, allowRead = false): string {
+function log(msg: string) {
+  const t = new Date().toTimeString().slice(0, 8);
+  console.log(`[pipeline ${t}] ${msg}`);
+}
+
+async function callClaude(prompt: string, allowRead = false): Promise<string> {
   const toolsFlag = allowRead ? '--allowedTools "Read"' : "--allowedTools ''";
   const cmd = `claude -p ${toolsFlag} --output-format text`;
 
   // Append strict instruction to suppress any commentary/insights
   const strictPrompt = prompt + "\n\nCRITICAL: Output ONLY what was requested above. No commentary, no insights, no explanations about formatting, no backtick blocks with ★, no preamble, no postamble. Raw output only.";
 
+  // exec() doesn't support `input` for stdin — write to a temp file and redirect
+  const tmpFile = path.join(os.tmpdir(), `claude-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  fs.writeFileSync(tmpFile, strictPrompt, "utf-8");
+
   try {
-    const result = execSync(cmd, {
-      input: strictPrompt,
+    const { stdout } = await execAsync(`${cmd} < ${tmpFile}`, {
       encoding: "utf-8",
       maxBuffer: 50 * 1024 * 1024,
-      timeout: 600_000, // 10 min timeout for large batches
+      timeout: 600_000, // 10 min timeout per batch
       cwd: ROOT,
-    });
-    return cleanOutput(result);
+      shell: true,
+    } as any) as unknown as { stdout: string; stderr: string };
+    return cleanOutput(stdout);
   } catch (err: any) {
     if (err.stdout) return cleanOutput(err.stdout);
     throw new Error(`Claude CLI failed: ${err.message}`);
+  } finally {
+    fs.unlinkSync(tmpFile);
   }
 }
 
@@ -124,28 +146,34 @@ function cleanOutput(raw: string): string {
 }
 
 // ── Stage 1: Extract content + Q&A from photos ──
-function extractFromPhotos(
+async function extractFromPhotos(
   subject: SubjectConfig,
   images: string[]
-): ChapterExtract[] {
-  log(`Sending ${images.length} image(s) to Claude CLI for extraction...`);
-
+): Promise<ChapterExtract[]> {
   const batches: string[][] = [];
   for (let i = 0; i < images.length; i += MAX_IMAGES_PER_BATCH) {
     batches.push(images.slice(i, i + MAX_IMAGES_PER_BATCH));
   }
 
-  let allRawContent = "";
+  log(`Sending ${images.length} image(s) in ${batches.length} parallel batch(es)...`);
 
-  for (let b = 0; b < batches.length; b++) {
-    const batch = batches[b];
-    if (batches.length > 1) {
-      log(`  Batch ${b + 1}/${batches.length} (${batch.length} images)...`);
+  // Log each batch's images upfront
+  batches.forEach((batch, b) => {
+    log(`  Batch ${b + 1}:`);
+    for (const img of batch) {
+      const sizeKb = Math.round(fs.statSync(img).size / 1024);
+      log(`    · ${path.basename(img)} (${sizeKb} KB)`);
     }
+  });
 
-    const imageList = batch.map((img) => `- ${img}`).join("\n");
+  const overallStart = Date.now();
 
-    const prompt = `Read each of these image files using the Read tool, then extract ALL content.
+  // Run ALL batches in parallel
+  const results = await Promise.all(
+    batches.map(async (batch, b) => {
+      const imageList = batch.map((img) => `- ${img}`).join("\n");
+
+      const prompt = `Read each of these image files using the Read tool, then extract ALL content.
 
 IMAGE FILES TO READ:
 ${imageList}
@@ -195,9 +223,19 @@ CRITICAL RULES:
 - Describe diagrams/flowcharts in [brackets]
 - Output ONLY the ===CHAPTER...===END=== blocks. Nothing else.`;
 
-    const result = callClaude(prompt, true);
-    allRawContent += "\n" + result;
-  }
+      const batchStart = Date.now();
+      const result = await callClaude(prompt, true);
+      const elapsed = ((Date.now() - batchStart) / 1000).toFixed(1);
+      const chaptersFound = (result.match(/===CHAPTER/g) || []).length;
+      log(`  Batch ${b + 1}/${batches.length} done in ${elapsed}s — ${chaptersFound} chapter block(s) found`);
+      return result;
+    })
+  );
+
+  const totalElapsed = ((Date.now() - overallStart) / 1000).toFixed(1);
+  log(`All ${batches.length} batch(es) completed in ${totalElapsed}s`);
+
+  const allRawContent = results.join("\n");
 
   // Parse chapter blocks
   const chapters: ChapterExtract[] = [];
@@ -237,12 +275,12 @@ CRITICAL RULES:
 }
 
 // ── Stage 2: Convert extracted Q&A to quiz app format ──
-function convertToQuizFormat(
+async function convertToQuizFormat(
   subject: SubjectConfig,
   chKey: string,
   chapter: { number: number; title: string; class: number },
   questionsRaw: string
-): string {
+): Promise<string> {
   log(`  Converting: Class ${chapter.class}, Ch ${chapter.number}: ${chapter.title}...`);
 
   const prompt = `Convert these extracted questions into the exact markdown format needed by the quiz app.
@@ -295,11 +333,15 @@ RULES:
 8. Number questions sequentially within each level (Q1, Q2, Q3...)
 9. Output ONLY the markdown. No code fences. No preamble.`;
 
-  return callClaude(prompt, false);
+  const start = Date.now();
+  const result = await callClaude(prompt, false);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+  log(`  Converted in ${elapsed}s`);
+  return result;
 }
 
 // ── Main ────────────────────────────────────────
-function main() {
+async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args[0] === "--help") {
@@ -311,7 +353,7 @@ Usage:
 
 Flow:
   uploads/<subject-id>/*.jpg
-      ↓ extract (Stage 1)
+      ↓ extract (Stage 1, parallel batches)
   knowledge/<subject-id>/
       ├── c6-ch01-content.md    (chapter notes/summaries)
       ├── c6-ch01-questions.md  (raw extracted Q&A)
@@ -322,10 +364,11 @@ Flow:
       └── ...
 
 Does NOT generate new questions — extracts only what's in the photos.
+Processed photos move to uploads/<subject-id>/processed/ automatically.
 
 Setup:
   1. Add subject to uploads/subjects.json
-  2. Drop ALL photos into uploads/<subject-id>/
+  2. Drop new photos into uploads/<subject-id>/ (processed ones live in processed/ subfolder)
   3. npx tsx scripts/pipeline.ts <subject-id>
 `);
     process.exit(0);
@@ -379,8 +422,9 @@ Setup:
     }
 
     log(`Found ${images.length} image(s) in uploads/${subject.id}/`);
+    log(`\n── Stage 1: Extract (${images.length} images) ──`);
 
-    const chapters = extractFromPhotos(subject, images);
+    const chapters = await extractFromPhotos(subject, images);
 
     if (chapters.length === 0) {
       console.error("No chapters could be identified from the images.");
@@ -410,6 +454,10 @@ Setup:
         log(`  Class ${ch.class}, Ch ${ch.number}: ${ch.title} — no content or questions found`);
       }
     }
+
+    // Move processed images so they're skipped on re-runs
+    moveToProcessed(images, uploadsSubDir);
+    log(`Moved ${images.length} image(s) → uploads/${subject.id}/processed/`);
 
     // Update subjects.json with discovered chapters
     const updatedSubjects = subjects.map((s) => {
@@ -453,7 +501,7 @@ Setup:
         }
       }
 
-      log(`\nConverting ${questionFiles.length} question file(s) to quiz format...`);
+      log(`\n── Stage 2: Convert (${questionFiles.length} chapter(s)) ──`);
 
       for (const file of questionFiles) {
         const chKey = file.replace("-questions.md", "");
@@ -461,6 +509,12 @@ Setup:
 
         if (!questionsRaw.trim()) {
           log(`  Skipping ${file} (empty)`);
+          continue;
+        }
+
+        const contentPath = path.join(contentSubDir, `${chKey}.md`);
+        if (fs.existsSync(contentPath) && fs.readFileSync(contentPath, "utf-8").trim().startsWith("---")) {
+          log(`  Skipping ${chKey} — content already exists`);
           continue;
         }
 
@@ -472,11 +526,10 @@ Setup:
         }
 
         const meta = chapterMeta[chKey] || { number: chNum, title: `Chapter ${chNum}`, class: chClass };
-        const quiz = convertToQuizFormat(subject, chKey, meta, questionsRaw);
+        const quiz = await convertToQuizFormat(subject, chKey, meta, questionsRaw);
 
         if (quiz) {
           const cleaned = quiz.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
-          const contentPath = path.join(contentSubDir, `${chKey}.md`);
           fs.writeFileSync(contentPath, cleaned + "\n", "utf-8");
           log(`  Saved → content/${subject.id}/${chKey}.md`);
         }
@@ -488,4 +541,7 @@ Setup:
   log("Done! Run `npm run dev` to see the updated quizzes.");
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
