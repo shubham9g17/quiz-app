@@ -58,7 +58,6 @@ export default function PlayPage() {
       setAnswers(newAnswers);
 
       if (currentIndex + 1 >= session.questions.length) {
-        // Quiz complete — save and go to results
         const result = {
           id: generateId(),
           date: new Date().toISOString(),
@@ -91,8 +90,8 @@ export default function PlayPage() {
 
   if (!session) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading quiz...</p>
+      <main className="min-h-screen bg-surface flex items-center justify-center">
+        <p className="text-slate-muted">Loading quiz...</p>
       </main>
     );
   }
@@ -101,10 +100,10 @@ export default function PlayPage() {
   const isLast = currentIndex + 1 >= session.questions.length;
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-lg mx-auto px-4 py-6">
+    <main className="min-h-screen bg-surface">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-4 mb-5">
           <div className="flex-1">
             <ProgressBar
               current={currentIndex + 1}
@@ -133,7 +132,9 @@ export default function PlayPage() {
         <button
           onClick={() => advance(selectedIndex)}
           disabled={selectedIndex === null}
-          className="w-full mt-6 py-4 bg-orange-600 text-white font-bold rounded-2xl text-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+          className={`w-full mt-5 py-3.5 text-base cursor-pointer ${
+            isLast ? "btn-blue" : "btn-primary"
+          }`}
         >
           {isLast ? "Finish Quiz" : "Next"}
         </button>

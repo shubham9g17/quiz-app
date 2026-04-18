@@ -44,8 +44,7 @@ export function buildQuizSession(
   const count = Math.min(config.questionCount, pool.length);
   const selected = pool.slice(0, count);
 
-  // Shuffle options within each question
-  const questions = selected.map(shuffleOptions);
+  const questions = selected;
 
   return { config, questions };
 }

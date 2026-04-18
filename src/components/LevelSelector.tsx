@@ -38,10 +38,10 @@ export default function LevelSelector({
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Difficulty</h3>
+        <h3 className="text-sm font-semibold text-navy">Difficulty</h3>
         <button
           onClick={toggleAll}
-          className="text-xs text-orange-600 font-medium hover:underline"
+          className="text-xs text-blue font-semibold hover:text-blue-dark transition-colors cursor-pointer"
         >
           {allSelected ? "Deselect All" : "Select All"}
         </button>
@@ -51,10 +51,10 @@ export default function LevelSelector({
           <button
             key={value}
             onClick={() => toggle(value)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               selected.includes(value)
-                ? "bg-orange-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "btn-primary"
+                : "btn-outline"
             }`}
           >
             {label}

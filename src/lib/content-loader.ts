@@ -56,6 +56,7 @@ function parseChapterMd(
 
   const chapterNumber = data.chapter as number;
   const title = data.title as string;
+  const chapterClass = (data.class as number) || 0;
 
   if (!chapterNumber || !title) return null;
 
@@ -84,18 +85,40 @@ function parseChapterMd(
       const qNum = questionMatch[1];
       let questionText = questionMatch[2];
 
-      // Collect continuation lines (for multi-line questions)
+      // Collect continuation lines (for multi-line questions with statements)
+      // Allows blank lines within question text (e.g., between numbered statements
+      // and "Which of the statements..." cue)
       i++;
-      while (
-        i < lines.length &&
-        !lines[i].startsWith("- ") &&
-        !lines[i].startsWith("##") &&
-        !lines[i].startsWith("> ") &&
-        lines[i].trim() !== ""
-      ) {
-        questionText += " " + lines[i].trim();
+      while (i < lines.length) {
+        const cl = lines[i];
+        // Stop at option lines, level headers, explanations, or next question
+        if (cl.startsWith("- (") || cl.startsWith("- **") || cl.startsWith("##") || cl.startsWith("> ")) break;
+
+        // Allow blank lines only if a non-blank continuation follows
+        if (cl.trim() === "") {
+          // Look ahead: if next non-blank line is an option or header, stop here
+          let j = i + 1;
+          while (j < lines.length && lines[j].trim() === "") j++;
+          if (
+            j >= lines.length ||
+            lines[j].startsWith("- (") ||
+            lines[j].startsWith("- **") ||
+            lines[j].startsWith("##") ||
+            lines[j].startsWith("> ")
+          ) {
+            break;
+          }
+          // Otherwise skip blank and continue collecting
+          questionText += "\n";
+          i++;
+          continue;
+        }
+
+        questionText += "\n" + cl;
         i++;
       }
+      // Trim and normalize whitespace
+      questionText = questionText.trim();
 
       // Collect option lines
       const optionLines: string[] = [];
@@ -140,7 +163,7 @@ function parseChapterMd(
     i++;
   }
 
-  return { number: chapterNumber, title, questions };
+  return { number: chapterNumber, title, class: chapterClass, questions };
 }
 
 export function loadSubject(subjectDir: string): Subject | null {
@@ -164,10 +187,14 @@ export function loadSubject(subjectDir: string): Subject | null {
   const raw = fs.readFileSync(path.join(fullPath, files[0]), "utf-8");
   const { data } = matter(raw);
 
+  // Collect unique classes from all chapters
+  const classSet = new Set(chapters.map((ch) => ch.class).filter((c) => c > 0));
+  const classes = Array.from(classSet).sort((a, b) => a - b);
+
   return {
     id: subjectDir,
     name: (data.subject as string) || subjectDir,
-    class: (data.class as number) || 0,
+    classes,
     chapters,
   };
 }

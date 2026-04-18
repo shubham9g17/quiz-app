@@ -43,3 +43,6 @@ next-env.d.ts
 # Raw book photos (large, not for git)
 *Raw/
 *raw/
+/uploads/*/
+!/uploads/subjects.json
+/knowledge/

@@ -11,11 +11,11 @@ interface QuestionCardProps {
 }
 
 const LEVEL_BADGES: Record<string, { label: string; className: string }> = {
-  moderate: { label: "Moderate", className: "bg-green-100 text-green-700" },
-  advanced: { label: "Advanced", className: "bg-yellow-100 text-yellow-700" },
+  moderate: { label: "Moderate", className: "bg-correct-bg text-correct" },
+  advanced: { label: "Advanced", className: "bg-warn-bg text-warn" },
   "previous-years": {
     label: "Previous Years",
-    className: "bg-purple-100 text-purple-700",
+    className: "bg-blue/10 text-blue",
   },
 };
 
@@ -29,38 +29,44 @@ export default function QuestionCard({
   const badge = LEVEL_BADGES[question.level] || LEVEL_BADGES.moderate;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+    <div className="card-elevated p-5 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <span className="text-sm font-medium text-gray-500">
+        <span className="text-sm font-semibold text-slate-muted">
           Q {questionNumber} / {totalQuestions}
         </span>
-        <div className="flex gap-2">
-          <span className="text-xs text-gray-400">Ch {question.chapter}</span>
-          <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.className}`}
-          >
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-slate-faint">Ch {question.chapter}</span>
+          <span className={`pill ${badge.className}`}>
             {badge.label}
           </span>
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold text-gray-900 mb-6 leading-relaxed">
+      <div className="text-base sm:text-lg font-semibold text-navy mb-5 leading-relaxed whitespace-pre-line">
         {question.text}
-      </h2>
+      </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {question.options.map((option, index) => (
           <button
             key={index}
             onClick={() => onSelect(index)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+            className={`w-full text-left p-3.5 flex items-center gap-3 ${
               selectedIndex === index
-                ? "border-orange-500 bg-orange-50"
-                : "border-gray-200 bg-white hover:border-gray-300"
+                ? "option-selected"
+                : "option"
             }`}
           >
-            <span className="text-sm text-gray-500 mr-2">{option.label}</span>
-            <span className="text-sm font-medium text-gray-900">
+            <span
+              className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
+                selectedIndex === index
+                  ? "bg-blue text-white"
+                  : "bg-surface text-slate-muted border border-border"
+              }`}
+            >
+              {option.label}
+            </span>
+            <span className="text-sm font-medium text-navy">
               {option.text}
             </span>
           </button>

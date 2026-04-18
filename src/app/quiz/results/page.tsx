@@ -23,8 +23,8 @@ export default function ResultsPage() {
 
   if (!result) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading results...</p>
+      <main className="min-h-screen bg-surface flex items-center justify-center">
+        <p className="text-slate-muted">Loading results...</p>
       </main>
     );
   }
@@ -48,19 +48,22 @@ export default function ResultsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-lg mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">
-          Quiz Results
-        </h1>
+    <main className="min-h-screen bg-surface">
+      {/* Top bar */}
+      <header className="border-b border-border bg-surface-card">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4">
+          <h1 className="text-lg font-bold text-navy">Quiz Results</h1>
+        </div>
+      </header>
 
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-8">
         <ResultsSummary result={result} questions={questions} />
 
-        <div className="space-y-3 mt-8">
+        <div className="flex flex-col sm:flex-row gap-3 mt-6">
           {result.answers.some((a) => !a.correct) && (
             <button
               onClick={retryWrongQuestions}
-              className="w-full py-4 bg-orange-600 text-white font-bold rounded-2xl text-lg hover:bg-orange-700 transition-all"
+              className="flex-1 py-3 text-sm btn-primary cursor-pointer"
             >
               Retry Wrong Questions
             </button>
@@ -69,13 +72,13 @@ export default function ResultsPage() {
             onClick={() =>
               router.push(`/quiz/setup?subject=${result!.config.subjectId}`)
             }
-            className="w-full py-4 bg-white text-orange-600 font-bold rounded-2xl text-lg border-2 border-orange-600 hover:bg-orange-50 transition-all"
+            className="flex-1 py-3 text-sm btn-outline cursor-pointer"
           >
             New Quiz
           </button>
           <button
             onClick={() => router.push("/")}
-            className="w-full py-3 text-gray-500 font-medium text-sm hover:text-gray-700 transition-all"
+            className="flex-1 py-3 text-sm btn-ghost cursor-pointer"
           >
             Home
           </button>

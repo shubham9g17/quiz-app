@@ -54,35 +54,59 @@ export default function SetupClient({ subject }: SetupClientProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-lg mx-auto px-4 py-8">
-        <a href="/" className="text-sm text-orange-600 hover:underline">
-          ← Back
-        </a>
+    <main className="min-h-screen bg-surface">
+      {/* Top bar */}
+      <header className="border-b border-border bg-surface-card">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4">
+          <a
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue hover:text-blue-dark transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+            Back to subjects
+          </a>
+        </div>
+      </header>
 
-        <h1 className="text-2xl font-bold text-gray-900 mt-4">
-          {subject.name}
-        </h1>
-        <p className="text-sm text-gray-500 mb-6">Class {subject.class}</p>
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-navy">{subject.name}</h1>
+          {subject.classes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {subject.classes.map((c) => (
+                <span key={c} className="pill bg-blue/10 text-blue">
+                  Class {c}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <div className="space-y-6">
+        <div className="card-elevated p-5 sm:p-6 space-y-6">
           <ChapterSelector
             chapters={subject.chapters}
             selected={selectedChapters}
             onChange={setSelectedChapters}
           />
 
+          <div className="border-t border-border" />
+
           <LevelSelector
             selected={selectedLevels}
             onChange={setSelectedLevels}
           />
 
+          <div className="border-t border-border" />
+
           {/* Question Count */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+            <h3 className="text-sm font-semibold text-navy mb-3">
               Questions: {effectiveCount}
               {available < questionCount && (
-                <span className="text-xs text-orange-600 ml-2">
+                <span className="text-xs text-warn ml-2 font-medium">
                   (only {available} available)
                 </span>
               )}
@@ -93,18 +117,20 @@ export default function SetupClient({ subject }: SetupClientProps) {
               max={50}
               value={questionCount}
               onChange={(e) => setQuestionCount(Number(e.target.value))}
-              className="w-full accent-orange-600"
+              className="w-full"
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <div className="flex justify-between text-xs text-slate-faint mt-1">
               <span>1</span>
               <span>25</span>
               <span>50</span>
             </div>
           </div>
 
+          <div className="border-t border-border" />
+
           {/* Timer */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+            <h3 className="text-sm font-semibold text-navy mb-3">
               Timer per Question
             </h3>
             <div className="flex gap-2">
@@ -112,10 +138,10 @@ export default function SetupClient({ subject }: SetupClientProps) {
                 <button
                   key={value}
                   onClick={() => setTimerSeconds(value)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
                     timerSeconds === value
-                      ? "bg-orange-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      ? "btn-primary"
+                      : "btn-outline"
                   }`}
                 >
                   {label}
@@ -128,7 +154,7 @@ export default function SetupClient({ subject }: SetupClientProps) {
         <button
           onClick={startQuiz}
           disabled={!canStart}
-          className="w-full mt-8 py-4 bg-orange-600 text-white font-bold rounded-2xl text-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+          className="w-full mt-6 py-3.5 text-base btn-blue cursor-pointer"
         >
           Start Quiz
         </button>

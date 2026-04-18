@@ -13,8 +13,10 @@ export default function HistorySummary() {
 
   if (history.length === 0) {
     return (
-      <div className="text-center text-gray-400 py-8">
-        <p className="text-sm">No quizzes taken yet. Pick a subject to start!</p>
+      <div className="card p-6 text-center">
+        <p className="text-sm text-slate-muted">
+          No quizzes taken yet. Pick a subject to start!
+        </p>
       </div>
     );
   }
@@ -27,24 +29,24 @@ export default function HistorySummary() {
   );
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+    <div className="card-elevated p-5">
+      <h3 className="text-xs font-semibold text-slate-muted uppercase tracking-wider mb-4">
         Your Progress
       </h3>
-      <div className="grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p className="text-2xl font-bold text-orange-600">{totalQuizzes}</p>
-          <p className="text-xs text-gray-500">Quizzes Taken</p>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="stat-card">
+          <p className="text-2xl font-bold text-navy">{totalQuizzes}</p>
+          <p className="text-xs text-slate-muted mt-0.5">Quizzes Taken</p>
         </div>
-        <div>
-          <p className="text-2xl font-bold text-orange-600">{avgScore}%</p>
-          <p className="text-xs text-gray-500">Avg Score</p>
+        <div className="stat-card">
+          <p className="text-2xl font-bold text-navy">{avgScore}%</p>
+          <p className="text-xs text-slate-muted mt-0.5">Avg Score</p>
         </div>
-        <div>
-          <p className="text-2xl font-bold text-orange-600">
+        <div className="stat-card">
+          <p className="text-2xl font-bold text-navy">
             {lastQuiz.score}/{lastQuiz.total}
           </p>
-          <p className="text-xs text-gray-500">Last Quiz</p>
+          <p className="text-xs text-slate-muted mt-0.5">Last Quiz</p>
         </div>
       </div>
     </div>

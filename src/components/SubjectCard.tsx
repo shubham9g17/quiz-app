@@ -3,30 +3,54 @@ import Link from "next/link";
 interface SubjectCardProps {
   id: string;
   name: string;
-  classNum: number;
+  classes: number[];
   chapterCount: number;
   questionCount: number;
+}
+
+function formatClasses(classes: number[]): string {
+  if (classes.length === 0) return "";
+  if (classes.length === 1) return `Class ${classes[0]}`;
+  const min = classes[0];
+  const max = classes[classes.length - 1];
+  // Check if consecutive
+  if (max - min + 1 === classes.length) return `Class ${min}–${max}`;
+  return `Class ${classes.join(", ")}`;
 }
 
 export default function SubjectCard({
   id,
   name,
-  classNum,
+  classes,
   chapterCount,
   questionCount,
 }: SubjectCardProps) {
   return (
     <Link href={`/quiz/setup?subject=${id}`}>
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-orange-300 transition-all cursor-pointer">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="bg-orange-100 text-orange-700 text-xs font-semibold px-2 py-1 rounded-full">
-            Class {classNum}
+      <div className="card card-hover p-5 cursor-pointer">
+        {classes.length > 0 && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="pill bg-blue/10 text-blue">
+              {formatClasses(classes)}
+            </span>
+          </div>
+        )}
+        <h2 className="text-base font-bold text-navy mb-1.5">{name}</h2>
+        <div className="flex gap-4 text-sm text-slate-muted">
+          <span className="flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+            </svg>
+            {chapterCount} chapters
           </span>
-        </div>
-        <h2 className="text-lg font-bold text-gray-900 mb-1">{name}</h2>
-        <div className="flex gap-4 text-sm text-gray-500">
-          <span>{chapterCount} chapters</span>
-          <span>{questionCount} questions</span>
+          <span className="flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <path d="M12 17h.01" />
+            </svg>
+            {questionCount} questions
+          </span>
         </div>
       </div>
     </Link>

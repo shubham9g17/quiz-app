@@ -1,13 +1,14 @@
 export interface Subject {
   id: string;
   name: string;
-  class: number;
+  classes: number[];
   chapters: Chapter[];
 }
 
 export interface Chapter {
   number: number;
   title: string;
+  class: number;
   questions: Question[];
 }
 

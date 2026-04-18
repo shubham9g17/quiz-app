@@ -40,16 +40,16 @@ export default function Timer({ seconds, onExpire, resetKey }: TimerProps) {
             cy="24"
             r="20"
             fill="none"
-            stroke="#e5e7eb"
-            strokeWidth="4"
+            stroke="#E2E8F0"
+            strokeWidth="3"
           />
           <circle
             cx="24"
             cy="24"
             r="20"
             fill="none"
-            stroke={isLow ? "#ef4444" : "#ea580c"}
-            strokeWidth="4"
+            stroke={isLow ? "#DC2626" : "#0F172A"}
+            strokeWidth="3"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - percent / 100)}
             strokeLinecap="round"
@@ -58,7 +58,7 @@ export default function Timer({ seconds, onExpire, resetKey }: TimerProps) {
         </svg>
         <span
           className={`absolute inset-0 flex items-center justify-center text-sm font-bold ${
-            isLow ? "text-red-500" : "text-gray-700"
+            isLow ? "text-wrong" : "text-navy"
           }`}
         >
           {remaining}
