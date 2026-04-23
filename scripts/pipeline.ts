@@ -2,19 +2,25 @@
 /**
  * NCERT Quiz Pipeline (uses Claude CLI — no API key needed)
  *
- * Dump new textbook/question bank photos into uploads/<subject-id>/ and run:
+ * Organise photos by chapter folder, then run:
  *   npx tsx scripts/pipeline.ts <subject-id>
  *
+ * Folder structure:
+ *   uploads/<subject-id>/
+ *     ch01/   ← all pages for chapter 1 (5-7 images)
+ *     ch02/   ← all pages for chapter 2
+ *     ch03/   ← ...
+ *
  * The pipeline will:
- *   1. Read all images from the uploads folder (raw dump, any order)
+ *   1. Read each chapter folder as one batch (no arbitrary splitting)
  *   2. Use `claude` CLI to extract chapter content AND existing Q&A from photos
  *   3. Save per-chapter knowledge to knowledge/<subject-id>/ (content + questions separately)
  *   4. Convert extracted Q&A into the quiz app's markdown format in content/<subject-id>/
  *
  * It does NOT generate new questions — it only extracts what's in the photos.
- * After extraction, processed photos are moved to uploads/<subject-id>/processed/
- * so re-running the pipeline only picks up newly added images.
- * Batches run in parallel to minimize total processing time.
+ * After extraction, processed chapter folders are moved to uploads/<subject-id>/processed/
+ * so re-running the pipeline only picks up new chapter folders.
+ * All chapter batches run in parallel to minimize total processing time.
  *
  * Options:
  *   --step extract     Only extract from photos into knowledge/
@@ -39,7 +45,7 @@ const CONTENT_DIR = path.join(ROOT, "content");
 const SUBJECTS_FILE = path.join(UPLOADS_DIR, "subjects.json");
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
-const MAX_IMAGES_PER_BATCH = 5;
+const MAX_RETRIES = 3;
 
 interface SubjectConfig {
   id: string;
@@ -60,21 +66,36 @@ function loadSubjects(): SubjectConfig[] {
   return JSON.parse(fs.readFileSync(SUBJECTS_FILE, "utf-8"));
 }
 
-function getImageFiles(dir: string): string[] {
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => IMAGE_EXTENSIONS.has(path.extname(f).toLowerCase()))
-    .sort()
-    .map((f) => path.join(dir, f));
+interface ChapterFolder {
+  name: string;   // e.g. "ch01"
+  images: string[];
 }
 
-function moveToProcessed(images: string[], subjectDir: string): void {
+function getChapterFolders(subjectDir: string): ChapterFolder[] {
+  if (!fs.existsSync(subjectDir)) return [];
+  return fs
+    .readdirSync(subjectDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && e.name !== "processed")
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) => {
+      const folderPath = path.join(subjectDir, e.name);
+      const images = fs
+        .readdirSync(folderPath)
+        .filter((f) => IMAGE_EXTENSIONS.has(path.extname(f).toLowerCase()))
+        .sort()
+        .map((f) => path.join(folderPath, f));
+      return { name: e.name, images };
+    })
+    .filter((ch) => ch.images.length > 0);
+}
+
+function moveToProcessed(chapterName: string, subjectDir: string): void {
   const processedDir = path.join(subjectDir, "processed");
   fs.mkdirSync(processedDir, { recursive: true });
-  for (const img of images) {
-    fs.renameSync(img, path.join(processedDir, path.basename(img)));
-  }
+  fs.renameSync(
+    path.join(subjectDir, chapterName),
+    path.join(processedDir, chapterName)
+  );
 }
 
 function log(msg: string) {
@@ -108,6 +129,21 @@ async function callClaude(prompt: string, allowRead = false): Promise<string> {
   } finally {
     fs.unlinkSync(tmpFile);
   }
+}
+
+async function callClaudeWithRetry(prompt: string, allowRead: boolean, label: string): Promise<string> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await callClaude(prompt, allowRead);
+    } catch (err: any) {
+      const isLast = attempt === MAX_RETRIES;
+      log(`  ${label} — attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}${isLast ? " (giving up)" : " (retrying...)"}`);
+      if (isLast) throw err;
+      // Exponential backoff: 5s, 10s, 20s
+      await new Promise(r => setTimeout(r, 5_000 * attempt));
+    }
+  }
+  throw new Error("unreachable");
 }
 
 /** Strip any ★ Insight blocks, backtick commentary, and leading/trailing noise */
@@ -148,19 +184,15 @@ function cleanOutput(raw: string): string {
 // ── Stage 1: Extract content + Q&A from photos ──
 async function extractFromPhotos(
   subject: SubjectConfig,
-  images: string[]
+  chapterFolders: ChapterFolder[],
+  uploadsSubDir: string
 ): Promise<ChapterExtract[]> {
-  const batches: string[][] = [];
-  for (let i = 0; i < images.length; i += MAX_IMAGES_PER_BATCH) {
-    batches.push(images.slice(i, i + MAX_IMAGES_PER_BATCH));
-  }
+  const totalImages = chapterFolders.reduce((n, ch) => n + ch.images.length, 0);
+  log(`Found ${chapterFolders.length} chapter folder(s) (${totalImages} images total), running in parallel...`);
 
-  log(`Sending ${images.length} image(s) in ${batches.length} parallel batch(es)...`);
-
-  // Log each batch's images upfront
-  batches.forEach((batch, b) => {
-    log(`  Batch ${b + 1}:`);
-    for (const img of batch) {
+  chapterFolders.forEach((ch) => {
+    log(`  ${ch.name}/: ${ch.images.length} image(s)`);
+    for (const img of ch.images) {
       const sizeKb = Math.round(fs.statSync(img).size / 1024);
       log(`    · ${path.basename(img)} (${sizeKb} KB)`);
     }
@@ -168,12 +200,9 @@ async function extractFromPhotos(
 
   const overallStart = Date.now();
 
-  // Run ALL batches in parallel
-  const results = await Promise.all(
-    batches.map(async (batch, b) => {
-      const imageList = batch.map((img) => `- ${img}`).join("\n");
-
-      const prompt = `Read each of these image files using the Read tool, then extract ALL content.
+  function buildExtractionPrompt(imgs: string[]): string {
+    const imageList = imgs.map((img) => `- ${img}`).join("\n");
+    return `Read each of these image files using the Read tool, then extract ALL content.
 
 IMAGE FILES TO READ:
 ${imageList}
@@ -222,20 +251,53 @@ CRITICAL RULES:
 - Include ALL content — do not skip or summarize anything
 - Describe diagrams/flowcharts in [brackets]
 - Output ONLY the ===CHAPTER...===END=== blocks. Nothing else.`;
+  }
 
+  // Run ALL chapter folders in parallel; each folder = one batch (chapter-aligned)
+  const settled = await Promise.allSettled(
+    chapterFolders.map(async (ch) => {
+      const label = ch.name;
       const batchStart = Date.now();
-      const result = await callClaude(prompt, true);
+
+      let result: string;
+      try {
+        result = await callClaudeWithRetry(buildExtractionPrompt(ch.images), true, label);
+      } catch {
+        // Retry failed — try single-image fallback for each page in the folder
+        log(`  ${label} — all retries failed, attempting 1-image fallback for each page...`);
+        const subResults: string[] = [];
+        for (const img of ch.images) {
+          const imgName = path.basename(img);
+          try {
+            const sub = await callClaudeWithRetry(buildExtractionPrompt([img]), true, `  ${label}/${imgName}`);
+            subResults.push(sub);
+          } catch (subErr: any) {
+            log(`  ${label}/${imgName} — skipping after all retries: ${subErr.message}`);
+          }
+        }
+        result = subResults.join("\n");
+      }
+
       const elapsed = ((Date.now() - batchStart) / 1000).toFixed(1);
       const chaptersFound = (result.match(/===CHAPTER/g) || []).length;
-      log(`  Batch ${b + 1}/${batches.length} done in ${elapsed}s — ${chaptersFound} chapter block(s) found`);
+      log(`  ${label}/ done in ${elapsed}s — ${chaptersFound} chapter block(s) found`);
+
+      // Move this chapter folder to processed immediately after success
+      moveToProcessed(ch.name, uploadsSubDir);
+      log(`  ${label}/ moved to processed/`);
+
       return result;
     })
   );
 
   const totalElapsed = ((Date.now() - overallStart) / 1000).toFixed(1);
-  log(`All ${batches.length} batch(es) completed in ${totalElapsed}s`);
+  const failed = settled.filter(r => r.status === "rejected").length;
+  if (failed > 0) log(`  Warning: ${failed} chapter folder(s) failed completely and were skipped (not moved to processed)`);
+  log(`All ${chapterFolders.length} chapter folder(s) completed in ${totalElapsed}s`);
 
-  const allRawContent = results.join("\n");
+  const allRawContent = settled
+    .map(r => r.status === "fulfilled" ? r.value : "")
+    .join("\n");
 
   // Parse chapter blocks
   const chapters: ChapterExtract[] = [];
@@ -351,9 +413,15 @@ NCERT Quiz Pipeline (uses Claude CLI — no API key needed)
 Usage:
   npx tsx scripts/pipeline.ts <subject-id> [--step extract|convert|all]
 
+Upload structure (one subfolder per chapter):
+  uploads/<subject-id>/
+    ch01/   page1.jpg, page2.jpg ... page6.jpg
+    ch02/   page1.jpg ... page7.jpg
+    ch03/   ...
+
 Flow:
-  uploads/<subject-id>/*.jpg
-      ↓ extract (Stage 1, parallel batches)
+  uploads/<subject-id>/ch01/, ch02/, ...
+      ↓ extract (Stage 1, all chapters run in parallel)
   knowledge/<subject-id>/
       ├── c6-ch01-content.md    (chapter notes/summaries)
       ├── c6-ch01-questions.md  (raw extracted Q&A)
@@ -364,11 +432,12 @@ Flow:
       └── ...
 
 Does NOT generate new questions — extracts only what's in the photos.
-Processed photos move to uploads/<subject-id>/processed/ automatically.
+Processed chapter folders move to uploads/<subject-id>/processed/ automatically.
+Failed folders stay in place so they can be retried on the next run.
 
 Setup:
   1. Add subject to uploads/subjects.json
-  2. Drop new photos into uploads/<subject-id>/ (processed ones live in processed/ subfolder)
+  2. Organise photos by chapter: uploads/<subject-id>/ch01/, ch02/, ...
   3. npx tsx scripts/pipeline.ts <subject-id>
 `);
     process.exit(0);
@@ -413,18 +482,19 @@ Setup:
 
   // ── Stage 1: Extract ──────────────────────────
   if (step === "all" || step === "extract") {
-    const images = getImageFiles(uploadsSubDir);
+    const chapterFolders = getChapterFolders(uploadsSubDir);
 
-    if (images.length === 0) {
-      console.error(`\nNo images found in uploads/${subject.id}/`);
-      console.error("Drop your textbook/question bank photos there and re-run.");
+    if (chapterFolders.length === 0) {
+      console.error(`\nNo chapter folders found in uploads/${subject.id}/`);
+      console.error("Expected structure:");
+      console.error(`  uploads/${subject.id}/ch01/  ← page images for chapter 1`);
+      console.error(`  uploads/${subject.id}/ch02/  ← page images for chapter 2`);
       process.exit(1);
     }
 
-    log(`Found ${images.length} image(s) in uploads/${subject.id}/`);
-    log(`\n── Stage 1: Extract (${images.length} images) ──`);
+    log(`\n── Stage 1: Extract (${chapterFolders.length} chapter folders) ──`);
 
-    const chapters = await extractFromPhotos(subject, images);
+    const chapters = await extractFromPhotos(subject, chapterFolders, uploadsSubDir);
 
     if (chapters.length === 0) {
       console.error("No chapters could be identified from the images.");
@@ -455,11 +525,8 @@ Setup:
       }
     }
 
-    // Move processed images so they're skipped on re-runs
-    moveToProcessed(images, uploadsSubDir);
-    log(`Moved ${images.length} image(s) → uploads/${subject.id}/processed/`);
-
     // Update subjects.json with discovered chapters
+    // (chapter folders already moved to processed/ during extraction)
     const updatedSubjects = subjects.map((s) => {
       if (s.id === subjectId) {
         return {
