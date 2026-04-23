@@ -2,8 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { Subject, QuizConfig, QuizSession, UserAnswer } from "@/types/quiz";
-import { buildQuizSession } from "@/lib/quiz-engine";
+import type {
+  Subject,
+  QuizConfig,
+  QuizSession,
+  Question,
+  UserAnswer,
+} from "@/types/quiz";
+import { buildQuizSession, buildRetrySession } from "@/lib/quiz-engine";
 import { saveQuizResult, generateId } from "@/lib/storage";
 import QuestionCard from "@/components/QuestionCard";
 import Timer from "@/components/Timer";
@@ -28,7 +34,21 @@ export default function PlayPage() {
 
     const config: QuizConfig = JSON.parse(configStr);
     const subject: Subject = JSON.parse(subjectStr);
-    const quizSession = buildQuizSession(subject, config);
+
+    const retryIdsStr = sessionStorage.getItem("retryQuestionIds");
+    const prevQuestionsStr = sessionStorage.getItem("quizQuestions");
+    sessionStorage.removeItem("retryQuestionIds");
+
+    let quizSession: QuizSession;
+    if (retryIdsStr && prevQuestionsStr) {
+      const retryIds: string[] = JSON.parse(retryIdsStr);
+      const prevQuestions: Question[] = JSON.parse(prevQuestionsStr);
+      const idSet = new Set(retryIds);
+      const retryQuestions = prevQuestions.filter((q) => idSet.has(q.id));
+      quizSession = buildRetrySession(config, retryQuestions);
+    } else {
+      quizSession = buildQuizSession(subject, config);
+    }
 
     if (quizSession.questions.length === 0) {
       router.push("/");

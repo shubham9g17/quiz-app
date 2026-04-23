@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { QuizResult, Question } from "@/types/quiz";
 import ResultsSummary from "@/components/ResultsSummary";
@@ -58,6 +59,53 @@ export default function ResultsPage() {
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-8">
         <ResultsSummary result={result} questions={questions} />
+
+        {(() => {
+          const wrongChapters = Array.from(
+            new Set(
+              result.answers
+                .map((a, i) => ({ a, q: questions[i] }))
+                .filter(({ a, q }) => q && !a.correct)
+                .map(({ q }) => q.chapter)
+            )
+          ).sort((a, b) => a - b);
+
+          if (wrongChapters.length === 0) return null;
+
+          return (
+            <div className="card-elevated p-5 mt-4">
+              <h3 className="text-xs font-semibold text-slate-muted uppercase tracking-wider mb-3">
+                Review Concepts
+              </h3>
+              <p className="text-sm text-slate-muted mb-3">
+                Brush up on the chapters where you missed questions.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {wrongChapters.map((ch) => (
+                  <Link
+                    key={ch}
+                    href={`/read/${result.config.subjectId}/${ch}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface text-sm font-semibold text-navy hover:border-blue hover:text-blue transition-colors"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    Chapter {ch}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="flex flex-col sm:flex-row gap-3 mt-6">
           {result.answers.some((a) => !a.correct) && (

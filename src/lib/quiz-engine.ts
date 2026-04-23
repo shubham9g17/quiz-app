@@ -49,6 +49,13 @@ export function buildQuizSession(
   return { config, questions };
 }
 
+export function buildRetrySession(
+  config: QuizConfig,
+  questions: Question[]
+): QuizSession {
+  return { config, questions: fisherYatesShuffle(questions) };
+}
+
 export function getAvailableQuestionCount(
   subject: Subject,
   chapters: number[],

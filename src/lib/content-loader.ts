@@ -120,6 +120,9 @@ function parseChapterMd(
       // Trim and normalize whitespace
       questionText = questionText.trim();
 
+      // Skip blank lines between question text and options
+      while (i < lines.length && lines[i].trim() === "") i++;
+
       // Collect option lines
       const optionLines: string[] = [];
       while (i < lines.length && lines[i].startsWith("- ")) {

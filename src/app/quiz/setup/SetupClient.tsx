@@ -50,6 +50,7 @@ export default function SetupClient({ subject }: SetupClientProps) {
     };
     sessionStorage.setItem("quizConfig", JSON.stringify(config));
     sessionStorage.setItem("quizSubject", JSON.stringify(subject));
+    sessionStorage.removeItem("retryQuestionIds");
     router.push("/quiz/play");
   }
 
@@ -87,6 +88,7 @@ export default function SetupClient({ subject }: SetupClientProps) {
 
         <div className="card-elevated p-5 sm:p-6 space-y-6">
           <ChapterSelector
+            subjectId={subject.id}
             chapters={subject.chapters}
             selected={selectedChapters}
             onChange={setSelectedChapters}
