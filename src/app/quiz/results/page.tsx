@@ -109,12 +109,23 @@ export default function ResultsPage() {
 
         <div className="flex flex-col sm:flex-row gap-3 mt-6">
           {result.answers.some((a) => !a.correct) && (
-            <button
-              onClick={retryWrongQuestions}
-              className="flex-1 py-3 text-sm btn-primary cursor-pointer"
-            >
-              Retry Wrong Questions
-            </button>
+            <>
+              <button
+                onClick={retryWrongQuestions}
+                className="flex-1 py-3 text-sm btn-primary cursor-pointer"
+              >
+                Retry Wrong Questions
+              </button>
+              <Link
+                href={`/revise/${result.config.subjectId}?ids=${result.answers
+                  .filter((a) => !a.correct)
+                  .map((a) => a.questionId)
+                  .join(",")}`}
+                className="flex-1 py-3 text-sm btn-blue text-center cursor-pointer"
+              >
+                Revise Wrong Answers
+              </Link>
+            </>
           )}
           <button
             onClick={() =>

@@ -66,18 +66,24 @@ export default function SubjectCard({
           {questionCount} questions
         </span>
       </div>
-      <div className="flex gap-2 mt-4">
+      <div className="grid grid-cols-3 gap-2 mt-4">
         <Link
           href={`/quiz/setup?subject=${id}`}
-          className="flex-1 text-center py-2 text-sm btn-primary"
+          className="text-center py-2 text-sm btn-primary"
         >
-          Start quiz
+          Quiz
+        </Link>
+        <Link
+          href={`/revise/${id}`}
+          className="text-center py-2 text-sm btn-blue"
+        >
+          Revise
         </Link>
         <Link
           href={`/read/${id}`}
-          className="flex-1 text-center py-2 text-sm btn-outline"
+          className="text-center py-2 text-sm btn-outline"
         >
-          Read notes
+          Notes
         </Link>
       </div>
     </div>
