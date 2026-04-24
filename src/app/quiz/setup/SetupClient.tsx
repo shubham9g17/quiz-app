@@ -125,15 +125,15 @@ export default function SetupClient({
             <input
               type="range"
               min={1}
-              max={50}
+              max={100}
               value={questionCount}
               onChange={(e) => setQuestionCount(Number(e.target.value))}
               className="w-full"
             />
             <div className="flex justify-between text-xs text-slate-faint mt-1">
               <span>1</span>
-              <span>25</span>
               <span>50</span>
+              <span>100</span>
             </div>
           </div>
 
