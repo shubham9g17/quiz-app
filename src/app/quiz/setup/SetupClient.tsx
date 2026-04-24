@@ -16,13 +16,22 @@ const TIMER_OPTIONS = [
 
 interface SetupClientProps {
   subject: Subject;
+  initialChapterNumbers?: number[];
 }
 
-export default function SetupClient({ subject }: SetupClientProps) {
+export default function SetupClient({
+  subject,
+  initialChapterNumbers,
+}: SetupClientProps) {
   const router = useRouter();
-  const [selectedChapters, setSelectedChapters] = useState<number[]>(
-    subject.chapters.map((ch) => ch.number)
-  );
+  const [selectedChapters, setSelectedChapters] = useState<number[]>(() => {
+    const allNumbers = subject.chapters.map((ch) => ch.number);
+    if (!initialChapterNumbers || initialChapterNumbers.length === 0) {
+      return allNumbers;
+    }
+    const valid = initialChapterNumbers.filter((n) => allNumbers.includes(n));
+    return valid.length > 0 ? valid : allNumbers;
+  });
   const [selectedLevels, setSelectedLevels] = useState<QuestionLevel[]>([
     "moderate",
     "advanced",

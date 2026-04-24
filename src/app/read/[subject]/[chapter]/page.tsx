@@ -109,16 +109,16 @@ export default async function ReadChapterPage({
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Link
-                href={`/quiz/setup?subject=${subject.id}`}
+                href={`/quiz/setup?subject=${subject.id}&chapter=${chapter.number}`}
                 className="flex-1 text-center py-3 text-sm btn-primary"
               >
-                Practice this subject
+                Practice this chapter
               </Link>
               <Link
-                href={`/read/${subject.id}`}
+                href={`/quiz/setup?subject=${subject.id}`}
                 className="flex-1 text-center py-3 text-sm btn-outline"
               >
-                All chapters
+                Practice full subject
               </Link>
             </div>
           </div>

@@ -56,13 +56,12 @@ export default async function ReadSubjectPage({
               ch.sections[0]?.heading ??
               "";
             return (
-              <Link
-                key={ch.number}
-                href={`/read/${subject.id}/${ch.number}`}
-                className="block card card-hover p-5"
-              >
+              <div key={ch.number} className="card card-hover p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/read/${subject.id}/${ch.number}`}
+                    className="min-w-0 flex-1 block"
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="pill bg-surface text-slate-faint border border-border">
                         Ch {ch.number}
@@ -81,12 +80,21 @@ export default async function ReadSubjectPage({
                         {teaser}
                       </p>
                     )}
-                  </div>
-                  <div className="text-xs text-slate-faint shrink-0 mt-1">
-                    ~{ch.readTimeMinutes} min
+                  </Link>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className="text-xs text-slate-faint">
+                      ~{ch.readTimeMinutes} min
+                    </span>
+                    <Link
+                      href={`/quiz/setup?subject=${subject.id}&chapter=${ch.number}`}
+                      className="pill bg-blue/10 text-blue hover:bg-blue/20 font-semibold"
+                      aria-label={`Quiz chapter ${ch.number}`}
+                    >
+                      Quiz ▶
+                    </Link>
                   </div>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>

@@ -2,12 +2,20 @@ import { loadAllSubjects } from "@/lib/content-loader";
 import SetupClient from "./SetupClient";
 
 interface SetupPageProps {
-  searchParams: Promise<{ subject?: string }>;
+  searchParams: Promise<{ subject?: string; chapter?: string }>;
 }
 
 export default async function SetupPage({ searchParams }: SetupPageProps) {
   const params = await searchParams;
   const subjectId = params.subject || "";
+  const chapterParam = params.chapter;
+  const initialChapterNumbers = chapterParam
+    ? chapterParam
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n))
+    : undefined;
+
   const subjects = loadAllSubjects();
   const subject = subjects.find((s) => s.id === subjectId);
 
@@ -27,5 +35,11 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
     );
   }
 
-  return <SetupClient subject={subject} />;
+  return (
+    <SetupClient
+      key={`${subjectId}-${chapterParam ?? "all"}`}
+      subject={subject}
+      initialChapterNumbers={initialChapterNumbers}
+    />
+  );
 }
