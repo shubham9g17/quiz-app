@@ -131,10 +131,20 @@ async function callClaude(prompt: string, allowRead = false): Promise<string> {
   }
 }
 
-async function callClaudeWithRetry(prompt: string, allowRead: boolean, label: string): Promise<string> {
+async function callClaudeWithRetry(
+  prompt: string,
+  allowRead: boolean,
+  label: string,
+  validate?: (out: string) => string | null
+): Promise<string> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await callClaude(prompt, allowRead);
+      const result = await callClaude(prompt, allowRead);
+      if (validate) {
+        const err = validate(result);
+        if (err) throw new Error(`invalid output: ${err}`);
+      }
+      return result;
     } catch (err: any) {
       const isLast = attempt === MAX_RETRIES;
       log(`  ${label} — attempt ${attempt}/${MAX_RETRIES} failed: ${err.message}${isLast ? " (giving up)" : " (retrying...)"}`);
@@ -396,7 +406,21 @@ RULES:
 9. Output ONLY the markdown. No code fences. No preamble.`;
 
   const start = Date.now();
-  const result = await callClaude(prompt, false);
+  const result = await callClaudeWithRetry(
+    prompt,
+    false,
+    `convert c${chapter.class}-ch${chapter.number}`,
+    (out) => {
+      const trimmed = out.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
+      if (!trimmed.startsWith("---")) {
+        return "output does not start with --- frontmatter";
+      }
+      if (!/^## Level\s/m.test(trimmed)) {
+        return "output missing ## Level section";
+      }
+      return null;
+    }
+  );
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   log(`  Converted in ${elapsed}s`);
   return result;
@@ -570,6 +594,7 @@ Setup:
 
       log(`\n── Stage 2: Convert (${questionFiles.length} chapter(s)) ──`);
 
+      const convertFailures: string[] = [];
       for (const file of questionFiles) {
         const chKey = file.replace("-questions.md", "");
         const questionsRaw = fs.readFileSync(path.join(knowledgeSubDir, file), "utf-8");
@@ -593,13 +618,22 @@ Setup:
         }
 
         const meta = chapterMeta[chKey] || { number: chNum, title: `Chapter ${chNum}`, class: chClass };
-        const quiz = await convertToQuizFormat(subject, chKey, meta, questionsRaw);
-
-        if (quiz) {
-          const cleaned = quiz.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
-          fs.writeFileSync(contentPath, cleaned + "\n", "utf-8");
-          log(`  Saved → content/${subject.id}/${chKey}.md`);
+        try {
+          const quiz = await convertToQuizFormat(subject, chKey, meta, questionsRaw);
+          if (quiz) {
+            const cleaned = quiz.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
+            fs.writeFileSync(contentPath, cleaned + "\n", "utf-8");
+            log(`  Saved → content/${subject.id}/${chKey}.md`);
+          }
+        } catch (err: any) {
+          convertFailures.push(chKey);
+          log(`  ${chKey} — convert failed after retries: ${err.message}`);
         }
+      }
+
+      if (convertFailures.length > 0) {
+        log(`\n  Convert failures (${convertFailures.length}): ${convertFailures.join(", ")}`);
+        log(`  Re-run \`npm run pipeline ${subject.id} --step convert\` to retry these.`);
       }
     }
   }
